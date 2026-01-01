@@ -10,12 +10,14 @@ import ComparisonDashboard from './components/ComparisonDashboard';
 import CorrelationHeatmap from './components/CorrelationHeatmap';
 import AttributionDetail from './components/AttributionDetail';
 import DiagnosticReport from './components/DiagnosticReport';
+import BiologicalSummary from './components/BiologicalSummary';
 
 const App: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [mode, setMode] = useState<'single' | 'compare'>('single');
   const [threshold, setThreshold] = useState(3.0);
   const [saltConcentration, setSaltConcentration] = useState(0.1);
+  const [mgConcentration, setMgConcentration] = useState(0.0015); 
   const [result, setResult] = useState<ScannerResult | null>(null);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [selectedWindow, setSelectedWindow] = useState<AnalysisWindow | null>(null);
@@ -39,18 +41,18 @@ const App: React.FC = () => {
     
     try {
       let currentThreshold = threshold;
-      let resA = analyzeSequence(sequenceA, currentThreshold, 15, 5, saltConcentration);
+      let resA = analyzeSequence(sequenceA, currentThreshold, 15, 5, saltConcentration, mgConcentration);
       
       if (resA.windows.filter(w => w.isAnomalous).length === 0 && currentThreshold > 2.0) {
         currentThreshold = 2.5;
-        resA = analyzeSequence(sequenceA, currentThreshold, 15, 5, saltConcentration);
+        resA = analyzeSequence(sequenceA, currentThreshold, 15, 5, saltConcentration, mgConcentration);
         if (resA.windows.filter(w => w.isAnomalous).length > 0) {
           setWarning("Low Confidence: Zero anomalies at 3σ. Lowered threshold to 2.5σ to identify potential signals.");
         }
       }
 
       if (mode === 'compare' && sequenceB) {
-        const resB = analyzeSequence(sequenceB, currentThreshold, 15, 5, saltConcentration);
+        const resB = analyzeSequence(sequenceB, currentThreshold, 15, 5, saltConcentration, mgConcentration);
         const comp = compareSequences(resA, resB);
         setComparison(comp);
       }
@@ -61,7 +63,8 @@ const App: React.FC = () => {
         anomalies: resA.windows.filter(w => w.isAnomalous).map(w => w.index),
         correlationMap: resA.correlationMap,
         thresholdUsed: currentThreshold,
-        multivariateScores: resA.multivariateScores
+        multivariateScores: resA.multivariateScores,
+        summary: resA.summary
       });
     } catch (err: any) {
       console.error(err);
@@ -104,27 +107,38 @@ const App: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex flex-wrap justify-center items-center gap-8 bg-black/30 p-4 rounded-2xl border border-white/5">
+          <div className="flex flex-wrap justify-center items-center gap-6 bg-black/30 p-4 rounded-2xl border border-white/5">
             <div className="flex items-center gap-4 text-xs font-mono text-gray-400">
               <span className="uppercase tracking-widest text-blue-400 font-bold">Sensitivity (σ):</span>
               <input 
                 type="range" min="1.0" max="4.0" step="0.1" 
                 value={threshold} 
                 onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                className="w-32 accent-blue-500"
+                className="w-24 accent-blue-500"
               />
               <span className="w-8 text-blue-400 font-bold">{threshold.toFixed(1)}</span>
             </div>
             
-            <div className="flex items-center gap-4 text-xs font-mono text-gray-400">
-              <span className="uppercase tracking-widest text-emerald-400 font-bold">Salt [Na+] (M):</span>
+            <div className="flex items-center gap-4 text-xs font-mono text-gray-400 border-l border-white/10 pl-6">
+              <span className="uppercase tracking-widest text-emerald-400 font-bold">Na+ (M):</span>
               <input 
                 type="range" min="0.01" max="1.0" step="0.01" 
                 value={saltConcentration} 
                 onChange={(e) => setSaltConcentration(parseFloat(e.target.value))}
-                className="w-32 accent-emerald-500"
+                className="w-24 accent-emerald-500"
               />
               <span className="w-12 text-emerald-400 font-bold">{saltConcentration.toFixed(2)}M</span>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs font-mono text-gray-400 border-l border-white/10 pl-6">
+              <span className="uppercase tracking-widest text-rose-400 font-bold">Mg2+ (M):</span>
+              <input 
+                type="range" min="0.0" max="0.1" step="0.0005" 
+                value={mgConcentration} 
+                onChange={(e) => setMgConcentration(parseFloat(e.target.value))}
+                className="w-24 accent-rose-500"
+              />
+              <span className="w-16 text-rose-400 font-bold">{(mgConcentration * 1000).toFixed(1)}mM</span>
             </div>
           </div>
         </div>
@@ -158,25 +172,8 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in duration-700">
             {mode === 'single' ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="glass-card p-6 rounded-2xl">
-                    <div className="text-sm font-semibold text-gray-400 uppercase mb-2">Sensitivity</div>
-                    <div className="text-4xl font-mono text-white">{result.thresholdUsed.toFixed(1)}σ</div>
-                  </div>
-                  <div className="glass-card p-6 rounded-2xl border-emerald-500/30">
-                    <div className="text-sm font-semibold text-emerald-400 uppercase mb-2">Salt [Na+]</div>
-                    <div className="text-4xl font-mono text-emerald-500">{saltConcentration.toFixed(2)}M</div>
-                  </div>
-                  <div className="glass-card p-6 rounded-2xl border-yellow-500/30">
-                    <div className="text-sm font-semibold text-yellow-400 uppercase mb-2">Anomalies</div>
-                    <div className="text-4xl font-mono text-yellow-500">{result.anomalies.length}</div>
-                  </div>
-                  <div className="glass-card p-6 rounded-2xl border-blue-500/30">
-                    <div className="text-sm font-semibold text-blue-400 uppercase mb-2">Avg M-Dist</div>
-                    <div className="text-4xl font-mono text-blue-500">{(result.multivariateScores.reduce((a,b)=>a+b,0)/result.multivariateScores.length).toFixed(2)}</div>
-                  </div>
-                </div>
-
+                {result.summary && <BiologicalSummary summary={result.summary} />}
+                
                 <Visualizations windows={result.windows} onSelectWindow={setSelectedWindow} />
                 
                 {selectedWindow && (
@@ -216,10 +213,10 @@ const App: React.FC = () => {
 
       <footer className="fixed bottom-0 left-0 right-0 glass-card py-4 border-t border-white/5 z-50">
         <div className="max-w-7xl mx-auto px-4 flex justify-between items-center text-xs text-gray-500">
-          <div><i className="fas fa-microchip mr-1"></i> Engine: JAX-Monolith Attribution Port</div>
+          <div><i className="fas fa-microchip mr-1"></i> Engine: JAX-Monolith V3.5 (Ultra-Precision)</div>
           <div className="flex gap-4">
              <span className="flex items-center"><i className="fas fa-circle text-blue-500 mr-1 text-[8px]"></i> Mutation Lab Active</span>
-             <span className="flex items-center"><i className="fas fa-circle text-emerald-500 mr-1 text-[8px]"></i> Salt Correction Enabled</span>
+             <span className="flex items-center"><i className="fas fa-circle text-emerald-500 mr-1 text-[8px]"></i> Divalent [Mg2+] Correction Enabled</span>
           </div>
         </div>
       </footer>

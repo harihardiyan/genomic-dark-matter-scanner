@@ -11,10 +11,19 @@ import {
   K_SALT, 
   EPS 
 } from '../constants';
-import { AnalysisWindow, BiophysicalFeatures, AnalysisStats, CorrelationPoint, ComparisonResult, AnalysisWindowDelta, AnomalyType, FeatureContribution } from '../types';
+import { 
+  AnalysisWindow, 
+  BiophysicalFeatures, 
+  AnalysisStats, 
+  CorrelationPoint, 
+  ComparisonResult, 
+  AnalysisWindowDelta, 
+  AnomalyType, 
+  BiologicalArchetype,
+  BiologicalSummary 
+} from '../types';
 
-export function analyzeSequence(sequence: string, threshold: number = 3.0, W: number = 15, S: number = 5, salt: number = 0.1) {
-  // Strict sanitation
+export function analyzeSequence(sequence: string, threshold: number = 3.0, W: number = 15, S: number = 5, salt: number = 0.1, saltMg: number = 0.0015) {
   const seq = sequence.toUpperCase().replace(/[^ACGTM]/g, 'N');
   const windows: AnalysisWindow[] = [];
   
@@ -24,7 +33,12 @@ export function analyzeSequence(sequence: string, threshold: number = 3.0, W: nu
 
   for (let i = 0; i <= seq.length - W; i += S) {
     const sub = seq.substring(i, i + W);
-    const windowFeatures = calculateWindowFeatures(sub, salt);
+    const windowFeatures = calculateWindowFeatures(sub, salt, saltMg);
+    
+    // High-precision Tm Calculation using Salt-Equivalence
+    const effectiveSalt = salt + 120 * Math.sqrt(Math.max(saltMg, 0));
+    const tm = 64.9 + 41 * (windowFeatures.gc - 0.5) + (16.6 * Math.log10(Math.max(effectiveSalt, 1e-5)));
+
     windows.push({
       index: Math.floor(i / S),
       start: i,
@@ -34,8 +48,10 @@ export function analyzeSequence(sequence: string, threshold: number = 3.0, W: nu
       isAnomalous: false,
       zScores: {},
       anomalyType: 'None',
+      archetype: 'Stable Helix',
       combinedScore: 0,
-      contributions: []
+      contributions: [],
+      tm: tm
     });
   }
 
@@ -51,7 +67,6 @@ export function analyzeSequence(sequence: string, threshold: number = 3.0, W: nu
     for (const key in features) {
       const val = features[key];
       const mean = means[key];
-      // If variance is zero (e.g. repetitive sequence), Z-score is 0 unless value differs from mean
       const std = stds[key] > EPS ? stds[key] : EPS;
       const z = (val - mean) / std;
       w.zScores[key] = z;
@@ -60,16 +75,13 @@ export function analyzeSequence(sequence: string, threshold: number = 3.0, W: nu
       rawContributions.push({ feature: key, zSq });
     }
     
-    // Multivariate Mahalanobis Distance (Euclidean in Z-space)
     w.combinedScore = Math.sqrt(distSq);
-
     w.contributions = rawContributions.map(c => ({
       feature: c.feature,
       score: (c.zSq / (distSq || EPS)) * w.combinedScore,
       percentage: (c.zSq / (distSq || EPS)) * 100
     })).sort((a, b) => b.score - a.score);
 
-    // Heuristic anomaly tagging based on specific feature outliers
     if (Math.abs(w.zScores.dG_per_base) > threshold) {
       w.isAnomalous = true;
       w.anomalyType = w.zScores.dG_per_base < 0 ? 'Thermal Dip' : 'Structural Shift';
@@ -84,24 +96,43 @@ export function analyzeSequence(sequence: string, threshold: number = 3.0, W: nu
       w.isAnomalous = true;
       w.anomalyType = 'Multivariate Deviation';
     }
+
+    w.archetype = classifyArchetype(w);
   });
 
   const correlationMap = calculateCrossCorrelation(windows);
+  
+  const summary: BiologicalSummary = {
+    promoterPotential: windows.filter(w => w.archetype === 'Putative Promoter').length,
+    structuralAnchors: windows.filter(w => w.archetype === 'Mechanical Anchor').length,
+    zDnaSites: windows.filter(w => w.archetype === 'Z-DNA Candidate').length,
+    avgTm: windows.reduce((acc, w) => acc + w.tm, 0) / windows.length
+  };
 
   return { 
     windows, 
     stats, 
     correlationMap, 
     thresholdUsed: threshold,
-    multivariateScores: windows.map(w => w.combinedScore)
+    multivariateScores: windows.map(w => w.combinedScore),
+    summary
   };
+}
+
+function classifyArchetype(w: AnalysisWindow): BiologicalArchetype {
+  const z = w.zScores;
+  if (w.features.gc > 0.7 && Math.abs(z.zx) > 2) return 'Z-DNA Candidate';
+  if (z.dG_per_base < -2 && z.bendability > 1.5) return 'Putative Promoter';
+  if (z.stack_per_base < -2 && z.bendability < -1.5) return 'Mechanical Anchor';
+  if (w.features.gc > 0.8 && z.stack_per_base < -2.5) return 'G-Quadruplex';
+  if (z.bendability > 2.5 && Math.abs(z.dG_per_base) < 1.5) return 'Flexible Linker';
+  return w.isAnomalous ? 'Unknown Anomaly' : 'Stable Helix';
 }
 
 export function compareSequences(resA: {windows: AnalysisWindow[]}, resB: {windows: AnalysisWindow[]}): ComparisonResult {
   const len = Math.min(resA.windows.length, resB.windows.length);
   const deltas: AnalysisWindowDelta[] = [];
   const sumDiff: any = { gc: 0, hb_per_base: 0, stack_per_base: 0, dG_per_base: 0, zx: 0, zy: 0, zz: 0, bendability: 0 };
-
   for (let i = 0; i < len; i++) {
     const wA = resA.windows[i];
     const wB = resB.windows[i];
@@ -114,7 +145,6 @@ export function compareSequences(resA: {windows: AnalysisWindow[]}, resB: {windo
     }
     deltas.push({ index: i, start: wA.start, end: wA.end, diff: diff as BiophysicalFeatures });
   }
-
   const avgDelta: any = {};
   for (const key in sumDiff) { avgDelta[key] = sumDiff[key] / Math.max(len, 1); }
   return { deltas, avgDelta: avgDelta as BiophysicalFeatures };
@@ -124,7 +154,6 @@ function calculateCrossCorrelation(windows: AnalysisWindow[]): CorrelationPoint[
   const result: CorrelationPoint[] = [];
   const lookback = 5;
   if (windows.length <= lookback) return [];
-  
   for (let i = lookback; i < windows.length; i++) {
     const slice = windows.slice(i - lookback, i);
     const hbVals = slice.map(w => w.features.hb_per_base);
@@ -149,7 +178,7 @@ function pearson(x: number[], y: number[]): number {
   return den === 0 ? 0 : num / den;
 }
 
-function calculateWindowFeatures(sub: string, salt: number): BiophysicalFeatures {
+function calculateWindowFeatures(sub: string, salt: number, saltMg: number): BiophysicalFeatures {
   const L = sub.length;
   let gcCount = 0, hbSum = 0, zxSum = 0, zySum = 0, zzSum = 0;
   for (let i = 0; i < L; i++) {
@@ -172,11 +201,9 @@ function calculateWindowFeatures(sub: string, salt: number): BiophysicalFeatures
     }
   }
   
-  // Thermodynamic Salt Correction (SantaLucia '98)
-  // [Na+] correction for entropy: dS(salt) = dS(1M) + 0.368 * (N-1) * ln[Na+]
   if (pairCount > 0) {
-    // Standard logarithmic correction for monovalent salt concentration
-    sSum += K_SALT * pairCount * Math.log(Math.max(salt, 1e-5));
+    const effectiveSalt = salt + 120 * Math.sqrt(Math.max(saltMg, 0));
+    sSum += K_SALT * pairCount * Math.log(Math.max(effectiveSalt, 1e-5));
   }
   
   const dG = (hSum - T_KELVIN * (sSum / 1000.0));

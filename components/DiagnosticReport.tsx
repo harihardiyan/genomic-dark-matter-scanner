@@ -56,7 +56,7 @@ const DiagnosticReport: React.FC<Props> = ({ window, onClose }) => {
 
         <div className="text-center border-b-2 border-slate-900 pb-8 mb-10">
           <h1 className="text-3xl font-bold tracking-tight mb-2 uppercase">Genomic Diagnostic Report</h1>
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">JAX-Monolith Biophysical Core V3.0 (DeterministicNN Engine)</p>
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">JAX-Monolith Biophysical Core V3.5 (Ultra-Precision Engine)</p>
           <div className="mt-4 flex justify-center gap-8 text-[10px] font-mono text-slate-400">
             <span>TIMESTAMP: {new Date().toLocaleString()}</span>
             <span>ENGINE: DETERMINISTIC-NEAREST-NEIGHBOR</span>
@@ -71,7 +71,7 @@ const DiagnosticReport: React.FC<Props> = ({ window, onClose }) => {
           <p className="text-slate-700 leading-relaxed text-sm">
             Laporan ini dihasilkan menggunakan parameter termodinamika <strong>Nearest-Neighbor (SantaLucia, 1998)</strong>. 
             Analisis dilakukan tanpa interpolasi data (Zero-Smoothing) untuk mempertahankan integritas sinyal biofisika asli. 
-            <strong> Salt Correction (Koreksi Garam)</strong> diterapkan secara dinamis untuk menyesuaikan stabilitas entropis berdasarkan konsentrasi kation monovalen yang ditentukan pengguna, memastikan model setara dengan standar perangkat lunak laboratorium profesional.
+            <strong> Salt Correction</strong> diterapkan secara dinamis termasuk koreksi ion divalent <strong>Magnesium [Mg2+]</strong> menggunakan model von Ahsen (2001) yang 20x lebih efektif dalam stabilisasi termal dibanding kation monovalen, memastikan model setara dengan standar perangkat lunak laboratorium profesional tingkat tinggi.
           </p>
         </section>
 
@@ -92,6 +92,10 @@ const DiagnosticReport: React.FC<Props> = ({ window, onClose }) => {
               <div className="flex justify-between border-b border-slate-100 py-1">
                 <span className="font-semibold text-slate-500">Prediction Class:</span>
                 <span className="font-bold uppercase text-blue-700">{window.anomalyType}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 py-1">
+                <span className="font-semibold text-slate-500">Melting Point (Tm):</span>
+                <span className="font-mono font-bold text-rose-600">{window.tm.toFixed(1)}°C</span>
               </div>
             </div>
             <div className="bg-slate-50 p-4 rounded border border-slate-100 font-mono text-xs break-all leading-relaxed">

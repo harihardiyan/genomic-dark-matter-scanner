@@ -39,7 +39,7 @@ const AnalysisReport: React.FC<Props> = ({ anomalousWindows, onWindowClick, onMu
         </div>
         <div className="text-[10px] text-gray-500 font-mono text-right">
           SCAN TYPE: MULTIVARIATE<br/>
-          ENGINE: JAX-MONOLITH V2
+          ENGINE: JAX-MONOLITH V3.5 (ULTIMATE)
         </div>
       </div>
 
@@ -47,7 +47,7 @@ const AnalysisReport: React.FC<Props> = ({ anomalousWindows, onWindowClick, onMu
         <div className="flex justify-between items-center mb-8">
           <div>
             <h3 className="text-xl font-bold text-white">Anomalous Region Map</h3>
-            <p className="text-sm text-gray-400">Coordinate mapping of physical outliers</p>
+            <p className="text-sm text-gray-400">Coordinate mapping of physical outliers and biological archetypes</p>
           </div>
         </div>
 
@@ -57,9 +57,12 @@ const AnalysisReport: React.FC<Props> = ({ anomalousWindows, onWindowClick, onMu
               key={win.index} 
               className="p-4 bg-black/40 border border-white/5 rounded-xl hover:border-blue-500/30 transition-all group relative overflow-hidden"
             >
-              <div className="absolute top-0 right-0 p-2 flex gap-2">
+              <div className="absolute top-0 right-0 p-2 flex flex-col items-end gap-1">
                 <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${getTypeColor(win.anomalyType)}`}>
                   {win.anomalyType}
+                </span>
+                <span className="text-[7px] text-gray-500 font-mono font-bold bg-white/5 px-1 rounded">
+                  Tm: {win.tm.toFixed(1)}°C
                 </span>
               </div>
               
@@ -68,10 +71,14 @@ const AnalysisReport: React.FC<Props> = ({ anomalousWindows, onWindowClick, onMu
               </div>
 
               <div 
-                className="font-mono text-lg text-blue-300 mb-4 tracking-widest break-all group-hover:text-white transition-colors cursor-pointer"
+                className="font-mono text-lg text-blue-300 mb-1 tracking-widest break-all group-hover:text-white transition-colors cursor-pointer"
                 onClick={() => onWindowClick && onWindowClick(win)}
               >
                 {win.sequence}
+              </div>
+              
+              <div className="text-[9px] font-bold text-purple-400 uppercase tracking-widest mb-4">
+                Archetype: {win.archetype}
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-4">

@@ -6,6 +6,14 @@ export interface ScannerResult {
   correlationMap?: CorrelationPoint[];
   thresholdUsed: number;
   multivariateScores: number[];
+  summary?: BiologicalSummary;
+}
+
+export interface BiologicalSummary {
+  promoterPotential: number;
+  structuralAnchors: number;
+  zDnaSites: number;
+  avgTm: number;
 }
 
 export interface CorrelationPoint {
@@ -27,6 +35,15 @@ export interface AnalysisWindowDelta {
 
 export type AnomalyType = 'Thermal Dip' | 'Structural Shift' | 'Stacking Anchor' | 'Multivariate Deviation' | 'None';
 
+export type BiologicalArchetype = 
+  | 'Putative Promoter' 
+  | 'Z-DNA Candidate' 
+  | 'G-Quadruplex' 
+  | 'Flexible Linker' 
+  | 'Mechanical Anchor' 
+  | 'Unknown Anomaly'
+  | 'Stable Helix';
+
 export interface FeatureContribution {
   feature: string;
   score: number;
@@ -42,8 +59,10 @@ export interface AnalysisWindow {
   isAnomalous: boolean;
   zScores: Record<string, number>;
   anomalyType: AnomalyType;
+  archetype: BiologicalArchetype;
   combinedScore: number;
   contributions: FeatureContribution[];
+  tm: number; // Melting Temperature in Celsius
 }
 
 export interface BiophysicalFeatures {
